@@ -7,4 +7,117 @@
         line: net.ipv4.ip_forward=1
         insertafter: EOF
     - name: Apply sysctl config-file
-      shell: sysctl -p 
+      shell: sysctl -p
+        #    - name: Update apt
+        #   apt: 
+        #  update_cache: yes
+        #  ignore_errors: true
+    - name: Install package
+      apt:
+        pkg:
+          - iptables-*
+          - strongswan
+- hosts: 200.100.200.100
+  tasks:
+    - name: Configure iptables
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        out_interface: ens192
+        src_range: 172.20.0.0-172.20.255.255
+        jump: MASQUERADE
+    - name: Saving iptables
+      community.general.iptables_state:
+        state: saved
+        path: /etc/iptables/rules.v4
+    - name: Configure GRE tunnel
+      copy: 
+        src: ./FW_gre.up
+        dest: /etc/FW_gre.up
+        mode: "0777"
+    - name: Start GRE tunnel
+      shell: /etc/FW_gre.up
+      ignore_errors: true
+    - name: Set crontab
+      lineinfile:
+        path: /etc/crontab
+        line: "@reboot root /etc/FW_gre.up"
+        insertafter: EOF
+    - name: Ipsec config FW
+      copy: 
+        src: ./ipsec_FW.conf
+        dest: /etc/ipsec.conf
+        mode: "0777" 
+    - name: Ipsec Secrets
+      lineinfile: 
+        path: /etc/ipsec.secrets
+        line: '200.100.200.100 200.100.100.100 : PSK "2022"'
+        insertafter: EOF
+    - name: Ipsec start
+      shell: ipsec start
+      ignore_errors: true
+    - name: Create static route
+      shell: ip route add 192.168.0.0/16 via 10.5.5.1
+      ignore_errors: true
+    - name: Check hostname
+      command: hostname
+      register: hostname 
+    - name: Set hostname
+      hostname:
+        name: FW
+      when: hostname.stdout != "FW"
+    - name: Reboot if hostname =! FW
+      reboot:
+      when: hostname.stdout != "FW"
+- hosts: 200.100.100.100
+  tasks:
+    - name: Configure iptables
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        src_range: 192.168.0.0-192.168.255.255
+        out_interface: ens192
+        jump: MASQUERADE
+    - name: Saved iptables
+      community.general.iptables_state:
+        state: saved
+        path: /etc/iptables/rules.v4
+    - name: Configure GRE tunnel
+      copy: 
+        src: ./CSR_gre.up
+        dest: /etc/CSR_gre.up
+        mode: "0777"
+    - name: Start GRE tunnel
+      shell: /etc/CSR_gre.up
+      ignore_errors: true
+    - name: Set crontab
+      lineinfile:
+        path: /etc/crontab
+        line: "@reboot root /etc/CSR_gre.up"
+        insertafter: EOF
+    - name: Ipsec config CSR
+      copy: 
+        src: ./ipsec_CSR.conf
+        dest: /etc/ipsec.conf
+        mode: "0777" 
+    - name: Ipsec Secrets
+      lineinfile: 
+        path: /etc/ipsec.secrets
+        line: '200.100.200.100 200.100.100.100 : PSK "2022"'
+        insertafter: EOF
+    - name: Ipsec start
+      shell: ipsec start
+      ignore_errors: true
+    - name: Create static route
+      shell: ip route add 172.20.0.0/16 via 10.5.5.2
+      ignore_errors: true
+    - name: Check hostname
+      command: hostname
+      register: hostname 
+    - name: Set hostname
+      hostname:
+        name: CSR
+      when: hostname.stdout != "CSR"
+    - name: Reboot if hostname != CSR
+      reboot:
+      when: hostname.stdout != "CSR"
