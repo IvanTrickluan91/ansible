@@ -17,6 +17,7 @@
         pkg:
           - iptables-*
           - strongswan
+          - nginx
 - hosts: 200.100.200.100
   tasks:
     - name: Configure iptables
@@ -69,6 +70,15 @@
     - name: Reboot if hostname =! FW
       reboot:
       when: hostname.stdout != "FW"
+    - name: Configure nginx proxy
+      copy:
+        src: ./proxy.conf
+        dest: /etc/nginx/sites-enabled/proxy.conf
+        mode: "0655"
+    - name: Restart nginx
+      service: 
+        name: nginx
+        state: restarted
 - hosts: 200.100.100.100
   tasks:
     - name: Configure iptables
@@ -121,3 +131,130 @@
     - name: Reboot if hostname != CSR
       reboot:
       when: hostname.stdout != "CSR"
+#
+##
+##################################################################################################
+##
+#
+- hosts: central
+  tasks:
+    - name: Install Package
+      apt:
+        pkg:
+          - chrony
+          - bind9
+          - keepalived
+          - nginx
+          - docker
+          - docker.io
+          - ufw
+          - pip 
+
+- hosts: 172.20.30.100 172.20.30.20
+  tasks:
+    - name: Configure Chrony
+      copy:
+        src: ./chrony.conf
+        dest: /etc/chrony/chrony.conf
+        mode: "0777"
+    - name: Restarted chrony
+      service:
+        name: chronyd
+        state: restarted
+    - name: Open port UFW for ssh
+      ufw:
+        state: enabled
+        rule: allow
+        port: 22
+    - name: Open port UFW for http
+      ufw: 
+        rule: allow
+        port: 80
+    - name: Open port UFW https
+      ufw: 
+        rule: allow
+        port: '443'
+- hosts: 172.20.30.100
+  vars_files:
+    - ./vars.yml
+  tasks:
+    - name: Configure keepalived SRV1
+      copy:
+        src: ./keepalived_SRV1.conf
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+    - name: Deploy script dns_check
+      copy:
+        src: ./dns_check
+        dest: /usr/dns_check
+        mode: "0777"
+    - name: Deploy script ntp_check
+      copy:
+        src: ./ntp_check
+        dest: /usr/ntp_check
+        mode: "0777"
+    - name: Restart keealived SRV1
+      service:
+        name: keepalived
+        state: restarted
+    - name: Check hostname
+      command: hostname
+      register: hostname1
+    - name: Set hostname
+      hostname:
+        name: "{{ vm_name_srv1 }}"
+      when: hostname1.stdout != "{{ vm_name_srv1 }}"
+    - name: Reboot if name changed
+      reboot:
+      when: hostname1.stdout != "{{ vm_name_srv1 }}"
+    - name: Docker Deploy
+      community.docker.docker_container:
+        name: WebSite
+        state: started
+        image: trickluan/nginx-test
+        ports:
+          - "80:8080"
+- hosts: 172.20.30.20
+  vars_files:
+    - ./vars.yml
+  tasks:
+    - name: Configure keepalived SRV2
+      copy:
+        src: ./keepalived_SRV2.conf
+        dest: /etc/keepalived/keepalived.conf
+        mode: "0644"
+    - name: Deploy script dns_check
+      copy:
+        src: ./dns_check
+        dest: /usr/dns_check
+        mode: "0777"
+    - name: Deploy script ntp_check
+      copy:
+        src: ./ntp_check
+        dest: /usr/ntp_check
+        mode: "0777"
+    - name: Restart keealived SRV2
+      service:
+        name: keepalived
+        state: restarted
+    - name: Check hostname
+      command: hostname
+      register: hostname2
+    - name: Set hostname
+      hostname:
+        name: "{{ vm_name_srv2 }}"
+      when: hostname2.stdout != "{{ vm_name_srv2 }}"
+    - name: Reboot if name changed
+      reboot:
+      when: hostname2.stdout != "{{ vm_name_srv2 }}"
+    - name: Install Docker module for python
+      pip: 
+        name: docker
+    - name: Docker Deploy
+      community.docker.docker_container:
+        name: WebSite
+        state: started
+        image: trickluan/nginx-test
+        ports:
+          - "80:8080"
+

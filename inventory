@@ -1,4 +1,11 @@
 [routers]
-200.100.200.100
-200.100.100.100
+200.100.200.100 ansible_sudo_pass=toor ansible_ssh_user=root
+200.100.100.100 ansible_sudo_pass=toor ansible_ssh_user=root
 
+[branch]
+192.168.200.200
+
+[central]
+172.20.30.100 ansible_sudo_pass=toor ansible_ssh_user=root
+172.20.30.20
+172.20.10.100

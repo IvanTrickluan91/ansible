@@ -1,0 +1,17 @@
+---
+- name: create users
+  hosts: 172.20.30.100
+  vars_files: 
+    - ./users.yml
+  tasks:
+    - name: create admin users
+      user:
+        name: '{{ admin_name }}'
+        password: '{{ admin_pass | password_hash("sha512") }}'
+        state: present
+        shell: /bin/bash
+        groups: 
+          - sudo
+          - docker
+        createhome: yes
+
