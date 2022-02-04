@@ -149,6 +149,7 @@
           - docker.io
           - ufw
           - pip 
+          - curl
 
 - hosts: 172.20.30.100 172.20.30.20
   tasks:
@@ -170,10 +171,39 @@
       ufw: 
         rule: allow
         port: 80
+    - name: Open port UFW for ssh
+      ufw: 
+        rule: allow
+        port: 2022 
     - name: Open port UFW https
       ufw: 
         rule: allow
         port: '443'
+    - name: Open Port UFW for docker-compose
+      ufw:
+        rule: allow
+        port: '1777'
+    - name: Install pip for docker-compose
+      pip:
+        name: docker-compose
+    - name: Install docker-compose
+      shell: curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    - name: Add permissions for install
+      shell: chmod +x /usr/local/bin/docker-compose
+    - name: Create folder
+      file:
+        path: /opt/project
+        state: directory
+        mode: '0777'
+    - name:  Copy docker composition
+      copy:
+        src: ./docker-compose.yml
+        dest: /opt/project/docker-compose.yml
+    - name: deploy docker-compose
+      docker_compose:
+        project_src: /opt/project/
+        files:
+          - docker-compose.yml
 - hosts: 172.20.30.100
   vars_files:
     - ./vars.yml
@@ -214,6 +244,14 @@
         image: trickluan/nginx-test
         ports:
           - "80:8080"
+    - name: Configure SSH
+      copy: 
+        src: ./sshd_config
+        dest: /etc/ssh/sshd_config
+    - name: restart ssh
+      service:
+        name: sshd 
+        state: restarted
 - hosts: 172.20.30.20
   vars_files:
     - ./vars.yml
